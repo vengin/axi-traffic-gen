@@ -25,6 +25,7 @@ import atg_import
 
 PROGRAM_NAME = 'AXI Traffic Generator'
 MAX_ROWS = 255
+VISIBLE_ROWS = 16
 
 class Application:
     def __init__(self, root):
@@ -32,6 +33,8 @@ class Application:
         self.root.title(PROGRAM_NAME)
         self.init_vars()
         self.createWidgets()
+        self.root.bind_all("<MouseWheel>", self.on_mousewheel)
+        self.refresh_view()
         self.root.grid()
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(3, weight=1)
@@ -43,20 +46,19 @@ class Application:
     def init_vars(self):
         self.axi_lite_type = IntVar()
         self.radix = 'hex'
-        self.rows = [ \
-                { \
-                'check': 0, \
-                'read_write': 0, \
-                'ok_next_addr': 0, \
-                'err_next_addr': 0, \
-                'address': 0, \
-                'data': 0, \
-                'mask': 0, \
-                'inc_error': 0, \
-                'goto_ok': 0, \
-                'goto_err': 0 \
-                } \
-                for k in range(MAX_ROWS)]
+        self.scroll_offset = 0
+        self.rows = []
+        for i in range(MAX_ROWS):
+            row = {}
+            row['address'] = StringVar()
+            row['data'] = StringVar()
+            row['read_write'] = IntVar(value=1)
+            row['mask'] = StringVar()
+            row['inc_error'] = BooleanVar(value=True)
+            row['goto_ok'] = IntVar(value=i+1)
+            row['goto_err'] = IntVar(value=i)
+            self.rows.append(row)
+        self.rows[MAX_ROWS-1]['address'].set('FFFFFFFF')
 
     def on_read_checkbox(self, var):
         def event_handler(event):
@@ -80,97 +82,67 @@ class Application:
         type_frame.grid(row=0, column=0)
 
         # Create a frame for the canvas and scrollbar(s).
-        frame2 = Frame(self.root, bd=2, relief=FLAT)
-        frame2.grid(row=3, column=0, sticky='nsew')
-        frame2.columnconfigure(0, weight=1)
-        frame2.rowconfigure(0, weight=1)
+        self.data_frame = Frame(self.root, bd=2, relief=FLAT)
+        self.data_frame.grid(row=3, column=0, sticky='nsew')
         # Add a canvas in that frame.
-        self.canvas = Canvas(frame2)
-        self.canvas.grid(row=0, column=0, sticky='nsew')
-        # Create a vertical scrollbar linked to the canvas.
-        vsbar = Scrollbar(frame2, orient=VERTICAL, command=self.canvas.yview)
-        vsbar.grid(row=0, column=1, sticky=NS)
-        self.canvas.configure(yscrollcommand=vsbar.set)
-        self.canvas.bind_all("<MouseWheel>", self.on_mousewheel)
+        self.data_frame.columnconfigure(0, weight=1)
+        self.data_frame.rowconfigure(0, weight=1)
 
-        text_frame = Frame(self.canvas, bd=5, relief=GROOVE, padx=15, pady=15)
-        Label(text_frame, text="Entry").grid(column=0,row=0)
-        Label(text_frame, text="Address").grid(column=1,row=0)
-        Label(text_frame, text="Data").grid(column=2,row=0)
-        Label(text_frame, text="Write").grid(column=3,row=0)
-        Label(text_frame, text="Read").grid(column=4,row=0)
-        Label(text_frame, text="Mask").grid(column=5,row=0)
-        Label(text_frame, text="Count?").grid(column=6,row=0)
-        Label(text_frame, text="Goto Ok").grid(column=7,row=0)
-        Label(text_frame, text="Goto Error").grid(column=8,row=0)
+        # Table Frame (holds headers and rows)
+        self.table_frame = Frame(self.data_frame, bd=5, relief=GROOVE)
+        self.table_frame.grid(row=0, column=0, sticky='nsew')
 
-        for i in range(MAX_ROWS):
-            Label(text_frame, text=i).grid(column=0,row=i+5)
+        # Scrollbar
+        self.scrollbar = Scrollbar(self.data_frame, orient=VERTICAL, command=self.on_scroll)
+        self.scrollbar.grid(row=0, column=1, sticky='ns')
 
-            self.rows[i]['address'] = StringVar()
-            addr = Entry(text_frame, \
-                    textvariable=self.rows[i]['address'], \
-                    width=10 \
-                    ).grid(column=1,row=i+5)
+        headers = ["Entry", "Address", "Data", "Write", "Read", "Mask", "Count?", "Goto Ok", "Goto Error"]
+        self.widths = [5, 10, 10, 5, 5, 10, 6, 7, 7]
 
-            self.rows[i]['data'] = StringVar()
-            data = Entry(text_frame,  \
-                    textvariable=self.rows[i]['data'], \
-                    width=10 \
-                    ).grid(column=2,row=i+5)
+        # Grid Headers
+        for idx, text in enumerate(headers):
+            Label(self.table_frame, text=text, width=self.widths[idx]).grid(row=0, column=idx)
 
-            self.rows[i]['read_write'] = IntVar()
-            self.rows[i]['read_write'].set(1)
-            read = Radiobutton(text_frame, \
-                    value=1, \
-                    variable=self.rows[i]['read_write'] \
-                    )
-            #read.bind('<Button-1>', self.on_read_checkbox(i))  # TODO
-            read.grid(column=3,row=i+5)
+        self.num_visible_rows = VISIBLE_ROWS
+        self.data_frame.bind("<Configure>", self.on_resize)
 
-            read = Radiobutton(text_frame, \
-                    value=0, \
-                    variable=self.rows[i]['read_write'] \
-                    )
-            read.grid(column=4,row=i+5)
 
-            self.rows[i]['mask'] = StringVar()
-            data = Entry(text_frame,  \
-                    textvariable=self.rows[i]['mask'], \
-                    width=10 \
-                    ).grid(column=5,row=i+5)
+        # Create reusable widget rows
+        self.view_rows = []
+        for i in range(VISIBLE_ROWS):
+            row_idx = i + 1
 
-            self.rows[i]['inc_error'] = BooleanVar()
-            self.rows[i]['inc_error'].set(True)
-            data = Checkbutton(text_frame,  \
-                    variable=self.rows[i]['inc_error'] \
-                    ).grid(column=6,row=i+5)
+            widgets = {}
 
-            self.rows[i]['goto_ok'] = IntVar()
-            self.rows[i]['goto_ok'].set(i+1)
-            data = Entry(text_frame,  \
-                    textvariable=self.rows[i]['goto_ok'], \
-                    width=4, \
-                    ).grid(column=7,row=i+5)
+            # Use fixed widths to align with headers approximately
+            widgets['index'] = Label(self.table_frame, width=self.widths[0])
+            widgets['index'].grid(row=row_idx, column=0)
 
-            self.rows[i]['goto_err'] = IntVar()
-            self.rows[i]['goto_err'].set(i)
-            data = Entry(text_frame,  \
-                    textvariable=self.rows[i]['goto_err'], \
-                    width=4, \
-                    ).grid(column=8,row=i+5)
+            widgets['address'] = Entry(self.table_frame, width=self.widths[1])
+            widgets['address'].grid(row=row_idx, column=1)
 
-        self.rows[MAX_ROWS-1]['address'].set('FFFFFFFF')
-        text_frame.grid(row=6, columnspan=5)
+            widgets['data'] = Entry(self.table_frame, width=self.widths[2])
+            widgets['data'].grid(row=row_idx, column=2)
 
-        # Create canvas window to hold the buttons_frame.
-        self.canvas.create_window((0,0), window=text_frame, anchor=NW)
-        text_frame.update_idletasks()  # Needed to make bbox info available.
-        bbox = self.canvas.bbox(ALL)  # Get bounding box of canvas with Buttons.
-        # Define the scrollable region as entire canvas with only the desired
-        # number of rows and columns displayed.
-        w, h = bbox[2]-bbox[1], bbox[3]-bbox[1]
-        self.canvas.configure(scrollregion=bbox, width=w, height=500)
+            widgets['write_rb'] = Radiobutton(self.table_frame, value=1, width=self.widths[3]-2)
+            widgets['write_rb'].grid(row=row_idx, column=3)
+
+            widgets['read_rb'] = Radiobutton(self.table_frame, value=0, width=self.widths[4]-2)
+            widgets['read_rb'].grid(row=row_idx, column=4)
+
+            widgets['mask'] = Entry(self.table_frame, width=self.widths[5])
+            widgets['mask'].grid(row=row_idx, column=5)
+
+            widgets['inc_error'] = Checkbutton(self.table_frame, width=self.widths[6]-2)
+            widgets['inc_error'].grid(row=row_idx, column=6)
+
+            widgets['goto_ok'] = Entry(self.table_frame, width=self.widths[7])
+            widgets['goto_ok'].grid(row=row_idx, column=7)
+
+            widgets['goto_err'] = Entry(self.table_frame, width=self.widths[8])
+            widgets['goto_err'].grid(row=row_idx, column=8)
+
+            self.view_rows.append(widgets)
 
         buttons_frame = Frame(self.root, bd=5, relief=GROOVE, padx=5, pady=5)
         self.quitButton = Button(buttons_frame, text='Quit', command=quit)
@@ -187,12 +159,132 @@ class Application:
         self.helpButton.grid(row=0, column=5, padx=20)
         buttons_frame.grid()
 
+
+    def ensure_rows(self, count):
+        current_count = len(self.view_rows)
+        # Create additional rows if needed
+        for i in range(current_count, count):
+            row_idx = i + 1
+            widgets = {}
+
+            widgets['index'] = Label(self.table_frame, width=self.widths[0])
+            widgets['index'].grid(row=row_idx, column=0)
+
+            widgets['address'] = Entry(self.table_frame, width=self.widths[1])
+            widgets['address'].grid(row=row_idx, column=1)
+
+            widgets['data'] = Entry(self.table_frame, width=self.widths[2])
+            widgets['data'].grid(row=row_idx, column=2)
+
+            widgets['write_rb'] = Radiobutton(self.table_frame, value=1, width=self.widths[3]-2)
+            widgets['write_rb'].grid(row=row_idx, column=3)
+
+            widgets['read_rb'] = Radiobutton(self.table_frame, value=0, width=self.widths[4]-2)
+            widgets['read_rb'].grid(row=row_idx, column=4)
+
+            widgets['mask'] = Entry(self.table_frame, width=self.widths[5])
+            widgets['mask'].grid(row=row_idx, column=5)
+
+            widgets['inc_error'] = Checkbutton(self.table_frame, width=self.widths[6]-2)
+            widgets['inc_error'].grid(row=row_idx, column=6)
+
+            widgets['goto_ok'] = Entry(self.table_frame, width=self.widths[7])
+            widgets['goto_ok'].grid(row=row_idx, column=7)
+
+            widgets['goto_err'] = Entry(self.table_frame, width=self.widths[8])
+            widgets['goto_err'].grid(row=row_idx, column=8)
+
+            self.view_rows.append(widgets)
+
+    def on_resize(self, event):
+        # Approximate row height (Label/Entry + padding)
+        row_height = 24
+        header_height = 30
+
+        available_height = event.height - header_height
+        if available_height < 0: available_height = 0
+
+        new_rows = available_height // row_height
+
+        # Keep reasonable bounds
+        if new_rows < 5: new_rows = 5
+        if new_rows > MAX_ROWS: new_rows = MAX_ROWS
+
+        if new_rows != self.num_visible_rows:
+            self.num_visible_rows = new_rows
+            self.ensure_rows(self.num_visible_rows)
+            # Clamp scroll offset if we expanded
+            self.scroll_offset = max(0, min(self.scroll_offset, MAX_ROWS - self.num_visible_rows))
+            self.refresh_view()
+
+    def on_scroll(self, *args):
+        if args[0] == 'moveto':
+            fraction = float(args[1])
+            self.scroll_offset = int(fraction * MAX_ROWS)
+        elif args[0] == 'scroll':
+            # args[1] is count (1 or -1)
+            # args[2] is units/pages
+            count = int(args[1])
+            self.scroll_offset += count
+
+        # Clamp
+        self.scroll_offset = max(0, min(self.scroll_offset, MAX_ROWS - self.num_visible_rows))
+        self.refresh_view()
+
     def on_mousewheel(self, event):
-        # Cross platform scroll wheel event
-        if event.num == 4 or event.delta > 0:
-            self.canvas.yview_scroll(-1, "units")
-        elif event.num == 5 or event.delta < 0:
-            self.canvas.yview_scroll(1, "units")
+        if event.delta > 0:
+            self.scroll_offset -= 1
+        else:
+            self.scroll_offset += 1
+
+        self.scroll_offset = max(0, min(self.scroll_offset, MAX_ROWS - self.num_visible_rows))
+        self.refresh_view()
+
+    def refresh_view(self):
+        # Update scrollbar thumb
+        start_frac = self.scroll_offset / MAX_ROWS
+        end_frac = (self.scroll_offset + self.num_visible_rows) / MAX_ROWS
+        self.scrollbar.set(start_frac, end_frac)
+
+        # Iterate over all created view rows
+        for i, widgets in enumerate(self.view_rows):
+            # If within current visible count
+            if i < self.num_visible_rows:
+                # Ensure they are visible (in case they were hidden)
+                # grid() without parameters restores previous grid settings if grid_remove was used
+                for w in widgets.values():
+                    w.grid()
+
+                data_idx = self.scroll_offset + i
+
+                if data_idx < MAX_ROWS:
+                    row_data = self.rows[data_idx]
+
+                    widgets['index'].config(text=str(data_idx))
+                    widgets['address'].config(textvariable=row_data['address'])
+                    widgets['data'].config(textvariable=row_data['data'])
+                    widgets['mask'].config(textvariable=row_data['mask'])
+
+                    widgets['write_rb'].config(variable=row_data['read_write'])
+                    widgets['read_rb'].config(variable=row_data['read_write'])
+
+                    widgets['inc_error'].config(variable=row_data['inc_error'])
+                    widgets['goto_ok'].config(textvariable=row_data['goto_ok'])
+                    widgets['goto_err'].config(textvariable=row_data['goto_err'])
+
+                    for w in widgets.values():
+                        if isinstance(w, (Entry, Radiobutton, Checkbutton, Label)):
+                             w.config(state='normal')
+                else:
+                    # Beyond MAX_ROWS (if window is very tall)
+                    for w in widgets.values():
+                        if isinstance(w, (Entry, Radiobutton, Checkbutton, Label)):
+                             w.config(state='disabled')
+            else:
+                # This row is extra (window shrank), hide it
+                for w in widgets.values():
+                    w.grid_remove()
+
 
     def to_hex(self, string):
         if string == '':
