@@ -21,6 +21,7 @@ import re
 import pickle
 from tkinter import *
 from tkinter import messagebox
+from tkinter import font as tkfont
 import atg_import
 
 PROGRAM_NAME = 'AXI Traffic Generator'
@@ -32,6 +33,8 @@ class Application:
         self.root = root
         self.root.title(PROGRAM_NAME)
         self.init_vars()
+        # Define monospace font for Entry fields
+        self.mono_font = tkfont.Font(family="Courier", size=9)
         self.createWidgets()
         self.root.bind_all("<MouseWheel>", self.on_mousewheel)
         self.refresh_view()
@@ -118,10 +121,10 @@ class Application:
             widgets['index'] = Label(self.table_frame, width=self.widths[0])
             widgets['index'].grid(row=row_idx, column=0)
 
-            widgets['address'] = Entry(self.table_frame, width=self.widths[1])
+            widgets['address'] = Entry(self.table_frame, font=self.mono_font, width=self.widths[1])
             widgets['address'].grid(row=row_idx, column=1)
 
-            widgets['data'] = Entry(self.table_frame, width=self.widths[2])
+            widgets['data'] = Entry(self.table_frame, font=self.mono_font, width=self.widths[2])
             widgets['data'].grid(row=row_idx, column=2)
 
             widgets['write_rb'] = Radiobutton(self.table_frame, value=1, width=self.widths[3]-2)
@@ -130,16 +133,16 @@ class Application:
             widgets['read_rb'] = Radiobutton(self.table_frame, value=0, width=self.widths[4]-2)
             widgets['read_rb'].grid(row=row_idx, column=4)
 
-            widgets['mask'] = Entry(self.table_frame, width=self.widths[5])
+            widgets['mask'] = Entry(self.table_frame, font=self.mono_font, width=self.widths[5])
             widgets['mask'].grid(row=row_idx, column=5)
 
             widgets['inc_error'] = Checkbutton(self.table_frame, width=self.widths[6]-2)
             widgets['inc_error'].grid(row=row_idx, column=6)
 
-            widgets['goto_ok'] = Entry(self.table_frame, width=self.widths[7])
+            widgets['goto_ok'] = Entry(self.table_frame, font=self.mono_font, width=self.widths[7])
             widgets['goto_ok'].grid(row=row_idx, column=7)
 
-            widgets['goto_err'] = Entry(self.table_frame, width=self.widths[8])
+            widgets['goto_err'] = Entry(self.table_frame, font=self.mono_font, width=self.widths[8])
             widgets['goto_err'].grid(row=row_idx, column=8)
 
             self.view_rows.append(widgets)
@@ -170,10 +173,10 @@ class Application:
             widgets['index'] = Label(self.table_frame, width=self.widths[0])
             widgets['index'].grid(row=row_idx, column=0)
 
-            widgets['address'] = Entry(self.table_frame, width=self.widths[1])
+            widgets['address'] = Entry(self.table_frame, font=self.mono_font, width=self.widths[1])
             widgets['address'].grid(row=row_idx, column=1)
 
-            widgets['data'] = Entry(self.table_frame, width=self.widths[2])
+            widgets['data'] = Entry(self.table_frame, font=self.mono_font, width=self.widths[2])
             widgets['data'].grid(row=row_idx, column=2)
 
             widgets['write_rb'] = Radiobutton(self.table_frame, value=1, width=self.widths[3]-2)
@@ -182,16 +185,16 @@ class Application:
             widgets['read_rb'] = Radiobutton(self.table_frame, value=0, width=self.widths[4]-2)
             widgets['read_rb'].grid(row=row_idx, column=4)
 
-            widgets['mask'] = Entry(self.table_frame, width=self.widths[5])
+            widgets['mask'] = Entry(self.table_frame, font=self.mono_font, width=self.widths[5])
             widgets['mask'].grid(row=row_idx, column=5)
 
             widgets['inc_error'] = Checkbutton(self.table_frame, width=self.widths[6]-2)
             widgets['inc_error'].grid(row=row_idx, column=6)
 
-            widgets['goto_ok'] = Entry(self.table_frame, width=self.widths[7])
+            widgets['goto_ok'] = Entry(self.table_frame, font=self.mono_font, width=self.widths[7])
             widgets['goto_ok'].grid(row=row_idx, column=7)
 
-            widgets['goto_err'] = Entry(self.table_frame, width=self.widths[8])
+            widgets['goto_err'] = Entry(self.table_frame, font=self.mono_font, width=self.widths[8])
             widgets['goto_err'].grid(row=row_idx, column=8)
 
             self.view_rows.append(widgets)
