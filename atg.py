@@ -97,7 +97,7 @@ class Application:
         self.scrollbar.grid(row=0, column=1, sticky='ns')
 
         headers = ["Entry", "Address", "Data", "Write", "Read", "Mask", "Count?", "Goto Ok", "Goto Error"]
-        self.widths = [5, 10, 10, 5, 5, 10, 6, 7, 7]
+        self.widths = [5, 10, 10, 5, 5, 10, 6, 8, 8]
 
         # Grid Headers
         for idx, text in enumerate(headers):
@@ -421,7 +421,67 @@ class Application:
             return
         column=dialog.result['column']
         filename=dialog.result['filename']
-        array = self.readCoe(filename)
+        
+        if column == 'all':
+            # Import all four .coe files
+            self.import_all_coe_files(filename)
+        else:
+            # Import single file
+            array = self.readCoe(filename)
+            self.import_column_data(column, array)
+    
+    def import_all_coe_files(self, base_path):
+        """Import all .coe files from specified directory or default locations"""
+        import os
+        
+        # Determine search directories
+        search_dirs = []
+        if base_path and os.path.isdir(base_path):
+            # User specified a directory
+            search_dirs.append(base_path)
+        else:
+            # Use default locations: current directory and ./coe subdirectory
+            current_dir = os.getcwd()
+            search_dirs.append(current_dir)
+            coe_subdir = os.path.join(current_dir, 'coe')
+            if os.path.isdir(coe_subdir):
+                search_dirs.append(coe_subdir)
+        
+        # Define file mappings: column name -> possible filenames
+        file_mappings = {
+            'address': ['addr.coe', 'address.coe'],
+            'data': ['data.coe'],
+            'mask': ['mask.coe'],
+            'control': ['ctrl.coe', 'control.coe']
+        }
+        
+        imported_files = []
+        missing_files = []
+        
+        # Try to import each file type
+        for column, possible_names in file_mappings.items():
+            found = False
+            for search_dir in search_dirs:
+                if found:
+                    break
+                for filename in possible_names:
+                    filepath = os.path.join(search_dir, filename)
+                    if os.path.isfile(filepath):
+                        try:
+                            array = self.readCoe(filepath)
+                            self.import_column_data(column, array)
+                            imported_files.append(f"{column}: {filename}")
+                            found = True
+                            break
+                        except Exception as e:
+                            print(f"Error importing {filepath}: {e}")
+            
+            if not found:
+                missing_files.append(f"{column} ({', '.join(possible_names)})")
+        
+    
+    def import_column_data(self, column, array):
+        """Import data array into specified column"""
         i=0
         for item in array:
             if i >= MAX_ROWS:
@@ -435,9 +495,11 @@ class Application:
             else:
                 self.rows[i][column].set(item)
             i=i+1
+        
+        # Refresh the view to show imported data
+        self.refresh_view()
 
 if __name__ == '__main__':
     root = Tk()
     Application(root)
     root.mainloop()
-
